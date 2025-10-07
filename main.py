@@ -14,9 +14,10 @@ if not os.path.isdir('store'):
 # Tracking user vc join/leave times
 vc_timelog = {}
 
-TOKEN = ''
-with open('store/token.txt', 'r') as f:
-	TOKEN = f.readline()
+config = {}
+with open('store/config.json', 'r') as f:
+	config = json.load(f)
+
 timezone = pytz.timezone('Australia/Melbourne')
 conversation_log_interval = datetime.timedelta(seconds=15) # Minimum time between logging a message for conversation
 conversation_response_interval = datetime.timedelta(seconds=240) # Minimum time between conversation responses
@@ -35,7 +36,8 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.De
 ### METHODS ###
 def restart_bot():
 	print('Restarting...')
-	os.system('git pull')
+	if os.system('git pull') != 0:
+		return
 	python = sys.executable
 	os.execv(python, [python] + sys.argv)
 
@@ -318,6 +320,16 @@ async def catchup(ctx: commands.Context, limit = 5000):
 	await ctx.send(content='Gathering quotes...')
 	async for msg in ctx.channel.history(limit=limit):
 		conversation_catalog(msg, True)
-	await ctx.send(content=f'Finished. Gathered ~{limit} quotes.')
+	await ctx.send(content=f'Finished. Gathered ~{limit} quotes.')\
 
-bot.run(TOKEN)
+@bot.command()
+async def update(ctx: commands.Context):
+	"""Updates bot from github"""
+	if ctx.author.id != config['dev_user_id']:
+		await ctx.send(content='no')
+		return
+	await ctx.send(content='Oughh, I\'m updating!!')
+	restart_bot()
+	await ctx.send(content='Update failed.')
+	
+bot.run(config['token'])
