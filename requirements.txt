@@ -1,2 +1,4 @@
 discord
 schedule
+pytz
+tzdata
