@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import discord
 import datetime
@@ -18,8 +19,8 @@ with open('store/token.txt', 'r') as f:
 	TOKEN = f.readline()
 timezone = pytz.timezone('Australia/Melbourne')
 conversation_log_interval = datetime.timedelta(seconds=15) # Minimum time between logging a message for conversation
-conversation_response_interval = datetime.timedelta(seconds=300) # Minimum time between conversation responses
-conversation_response_chance = 0.10 # Chance to respond per message after response cooldown (0-1)
+conversation_response_interval = datetime.timedelta(seconds=240) # Minimum time between conversation responses
+conversation_response_chance = 0.2 # Chance to respond per message after response cooldown (0-1)
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -32,6 +33,11 @@ intents.guild_reactions = True
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.DefaultHelpCommand(no_category='Commands'))
 
 ### METHODS ###
+def restart_bot():
+	print('Restarting...')
+	os.system('git pull')
+	python = sys.executable
+	os.execv(python, [python] + sys.argv)
 
 def initialize_leaderboard(guild: discord.Guild) -> dict:
 	announce_channel = 0
@@ -54,11 +60,11 @@ def add_leaderboard_time(member: discord.Member, duration: datetime.timedelta):
 	guild_id = str(member.guild.id)
 	if guild_id not in jdata:
 		jdata[guild_id] = initialize_leaderboard(member.guild)
-	
+	member_id = str(member.id)
 	for category in ['current', 'total']:
-		if member.id not in jdata[guild_id][category]:
-			jdata[guild_id][category][member.id] = 0
-		jdata[guild_id][category][member.id] += int(duration.seconds)
+		if member_id not in jdata[guild_id][category]:
+			jdata[guild_id][category][member_id] = 0
+		jdata[guild_id][category][member_id] += int(duration.seconds)
 	
 	with open('store/leaderboard.json', 'w') as f:
 		json.dump(jdata, f, indent=4)
@@ -85,19 +91,23 @@ def get_leaderboard(guild: discord.Guild, category: str):
 
 def get_leaderboard_embed(guild: discord.Guild, category: str) -> discord.Embed | None:
 	desc = ''
-	i = 0
 	pretitle = ''
+	footer = ''
 	category = str.lower(category)
 	match category:
 		case 'current':
 			pretitle = 'Weekly'
+			footer = f'Resets 12AM Monday morning ({timezone}).'
 		case 'top':
 			pretitle = 'Highest Weekly'
+			footer = f'Updates 12AM Monday morning ({timezone}).'
 		case 'total':
 			pretitle = 'Total'
+			footer = 'Total time spent in VC since this bot has joined.'
 		case _:
 			return
 	lb = get_leaderboard(guild, category)
+	i = 0
 	if lb is not None:
 		for entry in lb:
 			if entry[1] == 0:
@@ -110,7 +120,9 @@ def get_leaderboard_embed(guild: discord.Guild, category: str) -> discord.Embed 
 			desc = 'No recorded activity.'
 	else:
 		desc = 'No recorded activity.'
-	return discord.Embed(title=f'{pretitle} VC Activity', description=desc)
+	embed = discord.Embed(title=f'{pretitle} VC Activity', description=desc)
+	embed.set_footer(text=footer)
+	return embed
 	
 def set_leaderboard_channel(guild: discord.Guild, channel: discord.TextChannel) -> str:
 	jdata = {}
@@ -124,6 +136,8 @@ def set_leaderboard_channel(guild: discord.Guild, channel: discord.TextChannel) 
 		print('ALERT: JSON decode error for leaderboard.json')
 		print(e)
 		return 'JSON decode error. Contact developer'
+	if guild_id not in jdata:
+		jdata[guild_id] = initialize_leaderboard(guild)
 	jdata[guild_id]['lb_announce_channel'] = str(channel.id)
 
 	with open('store/leaderboard.json', 'w') as f:
@@ -167,13 +181,13 @@ def conversation_catalog(message: discord.Message, force: bool = False):
 		msg = ''
 		if len(message.content) != 0 and len(message.content) < 200:
 			msg = message.content
-		elif message.attachments and message.attachments[0].content_type.startswith('image/') and message.attachments[0].url:
+		elif message.attachments and message.attachments[0].content_type and message.attachments[0].content_type.startswith('image/') and message.attachments[0].url:
 			msg = message.attachments[0].url
 		elif message.embeds and message.embeds[0].url:
 			msg = message.embeds[0].url
 		else:
 			return
-		with open('store/conversation.txt', 'a') as f:
+		with open('store/conversation.txt', 'a', encoding="utf-8") as f:
 			f.write(msg.replace('\n','\\n'))
 			f.write('\n')
 		clog_next_record[message.guild.id] = now + conversation_log_interval
@@ -185,10 +199,10 @@ def conversation_response(message: discord.Message) -> str | None:
 	if message.guild.id not in clog_next_response or clog_next_response[message.guild.id] < now:
 		chance = conversation_response_chance
 		if bot.user in message.mentions:
-			chance = min(conversation_response_chance * 2, 1)
-		if random.random() < chance and os.path.exists('store/conversation.txt'):
+			chance = min(conversation_response_chance * 3, 1)
+		if random.random() <= chance and os.path.exists('store/conversation.txt'):
 			clog_next_response[message.guild.id] = now + conversation_response_interval
-			with open('store/conversation.txt', 'r') as f:
+			with open('store/conversation.txt', 'r', encoding='utf-8') as f:
 				return random.choice(f.readlines()).replace('\\n', '\n')
 
 
@@ -241,7 +255,7 @@ async def on_voice_state_update(member, before, after):
 
 @bot.event
 async def on_message(message: discord.Message):
-	if(message.author == bot.user):
+	if(message.author.id == bot.user.id):
 		return
 	if(message.content and message.content[0] == '!'):
 		await bot.process_commands(message)
@@ -295,6 +309,15 @@ async def coinflip(ctx: commands.Context):
 	probs = [49.95, 49.95, 0.1]
 	await ctx.send(content=random.choices(outcomes, probs, k=1)[0])
 	
-
+@bot.command()
+async def catchup(ctx: commands.Context, limit = 5000):
+	"""Goes through previous channel history to update quote DB. argument specifies how far to look back (default=5000)"""
+	if ctx.author.guild_permissions.administrator == False:
+		await ctx.send(content='Insufficient permissions')
+		return
+	await ctx.send(content='Gathering quotes...')
+	async for msg in ctx.channel.history(limit=limit):
+		conversation_catalog(msg, True)
+	await ctx.send(content=f'Finished. Gathered ~{limit} quotes.')
 
 bot.run(TOKEN)
