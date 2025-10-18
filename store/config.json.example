@@ -1,0 +1,15 @@
+{
+	"dev_user_id": 0,
+	"token": "BOT_TOKEN",
+	"timezone": "Australia/Melbourne",
+	"conversation_log_interval": 15,
+	"conversation_response_interval": 80,
+	"conversation_response_chance": 0.15,
+	"restart_special_message": "https://cdn.discordapp.com/attachments/1372188313003491340/1412065256372441088/v12044gd0000ckv9ptfog65tas9eetb0.mov",
+	"lavalink_enable": false,
+	"lavalink_host": "localhost",
+	"lavalink_port": 2333,
+	"lavalink_pass": "youshallnotpass",
+	"lavalink_region": "asia",
+	"lavalink_name": "chiyo"
+}

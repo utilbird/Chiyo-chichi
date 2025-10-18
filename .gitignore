@@ -207,4 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 # APPLICATION SPECIFIC
-store/
+store/config.json
+store/conversation.txt
+store/leaderboard.json
