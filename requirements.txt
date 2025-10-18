@@ -2,3 +2,4 @@ discord
 schedule
 pytz
 tzdata
+lavalink
