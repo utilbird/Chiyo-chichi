@@ -35,7 +35,7 @@ intents.voice_states = True
 intents.guild_messages = True
 intents.guild_reactions = True
 
-bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.DefaultHelpCommand(no_category='Commands'))
+bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.DefaultHelpCommand(width = 100, no_category='Commands'))
 
 ### METHODS ###
 def restart_bot():
@@ -215,6 +215,24 @@ def conversation_response(message: discord.Message) -> str | None:
 			with open('store/conversation.txt', 'r', encoding='utf-8') as f:
 				return random.choice(f.readlines()).replace('\\n', '\n')
 
+def leaderboard_begin_track(member: discord.Member):
+	guild_id = member.guild.id
+	if guild_id not in vc_timelog:
+		vc_timelog[guild_id] = {}
+	vc_timelog[guild_id][member.id] = datetime.datetime.now()
+
+def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedelta | None:
+	guild_id = member.guild.id
+	if guild_id not in vc_timelog or member.id not in vc_timelog[guild_id]:
+		print(f'{member.display_name} left a voice channel, but join time not found (bot might have restarted).')
+		return
+	join_time = vc_timelog[guild_id].pop(member.id)
+	duration = datetime.datetime.now() - join_time
+	add_leaderboard_time(member, duration)
+	if not remove:
+		leaderboard_begin_track(member)
+	return duration
+
 
 ### BOT EVENTS ###
 
@@ -246,20 +264,13 @@ async def on_voice_state_update(member, before, after):
 
 	# User joined a voice channel
 	if before.channel is None and after.channel is not None:
-		if guild_id not in vc_timelog:
-			vc_timelog[guild_id] = {}
-		vc_timelog[guild_id][user_id] = datetime.datetime.now()
+		leaderboard_begin_track(member)
 		print(f'{member.display_name} joined {after.channel.name} at {vc_timelog[guild_id][user_id]}')
 
 	# User left a voice channel
 	elif before.channel is not None and after.channel is None:
-		if guild_id in vc_timelog and user_id in vc_timelog[guild_id]:
-			join_time = vc_timelog[guild_id].pop(user_id)
-			duration = datetime.datetime.now() - join_time
-			print(f'{member.display_name} left {before.channel.name}. Time spent: {duration}')
-			add_leaderboard_time(member, duration)
-		else:
-			print(f'{member.display_name} left a voice channel, but join time not found (bot might have restarted).')
+		update_leaderboard(member, True)
+		print(f'{member.display_name} left {before.channel.name}')
 
 	# User switched voice channels
 	#elif before.channel is not None and after.channel is not None and before.channel != after.channel:
@@ -298,6 +309,11 @@ async def on_message(message: discord.Message):
 @bot.command()
 async def leaderboard(ctx: commands.Context, category: str = 'current'):
 	"""Displays voice channel activity rankings"""
+	if ctx.guild.id in vc_timelog and vc_timelog[ctx.guild.id]:
+		for member_id in vc_timelog[ctx.guild.id]:
+			member = ctx.guild.get_member(member_id)
+			if member:
+				update_leaderboard(member, False)
 	embed = get_leaderboard_embed(ctx.guild, category)
 	if embed:
 		await ctx.send(embed=embed)
@@ -350,9 +366,10 @@ async def update(ctx: commands.Context):
 	"""Updates bot from github"""
 	if ctx.author.id != config['dev_user_id']:
 		return await ctx.send('no')
-	await ctx.send('Beginning update and restart.')
+	rmsg = 'Updating and restarting process...'
 	if(config['restart_special_message']):
-		await ctx.send(config['restart_special_message'])
+		rmsg += f'\n{config['restart_special_message']}'
+	await ctx.send(rmsg)
 	restart_bot()
 	await ctx.send('Update failed.')
 
