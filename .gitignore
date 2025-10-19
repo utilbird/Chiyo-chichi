@@ -210,3 +210,4 @@ __marimo__/
 store/config.json
 store/conversation.txt
 store/leaderboard.json
+store/update.log
