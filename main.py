@@ -242,8 +242,7 @@ def restart_bot(channel: discord.TextChannel = None):
 	update_cmd = 'git pull'
 	if channel:
 		with open('store/update.log', 'w') as f:
-			channel_id = str(channel.id) # redundant but I was getting errors when casting as argument?
-			f.write(channel_id)
+			f.write(str(channel.id))
 			f.write('\n')
 		update_cmd += ' >> store/update.log'
 	if os.system(update_cmd) != 0:
