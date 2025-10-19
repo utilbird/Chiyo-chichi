@@ -224,7 +224,7 @@ def leaderboard_begin_track(member: discord.Member):
 def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedelta | None:
 	guild_id = member.guild.id
 	if guild_id not in vc_timelog or member.id not in vc_timelog[guild_id]:
-		print(f'{member.display_name} left a voice channel, but join time not found (bot might have restarted).')
+		print(f'{member.display_name} left a voice channel (or had lb status updated), but join time not found (bot might have restarted).')
 		return
 	join_time = vc_timelog[guild_id].pop(member.id)
 	duration = datetime.datetime.now() - join_time
@@ -310,7 +310,8 @@ async def on_message(message: discord.Message):
 async def leaderboard(ctx: commands.Context, category: str = 'current'):
 	"""Displays voice channel activity rankings"""
 	if ctx.guild.id in vc_timelog and vc_timelog[ctx.guild.id]:
-		for member_id in vc_timelog[ctx.guild.id]:
+		member_id_list = vc_timelog[ctx.guild.id].keys()
+		for member_id in member_id_list:
 			member = ctx.guild.get_member(member_id)
 			if member:
 				update_leaderboard(member, False)
