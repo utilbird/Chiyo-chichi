@@ -239,11 +239,13 @@ def graceful_shutdown():
 def restart_bot(channel: discord.TextChannel = None):
 	print('Restarting...')
 	graceful_shutdown()
+	update_cmd = 'git pull'
 	if channel:
 		with open('store/update.log', 'w') as f:
 			f.write(channel.id)
 			f.write('\n')
-	if os.system('git pull >> store/update.log') != 0:
+		update_cmd += ' >> store/update.log'
+	if os.system(update_cmd) != 0:
 		return
 	python = sys.executable
 	os.execv(python, [python] + sys.argv)
