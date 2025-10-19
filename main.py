@@ -228,6 +228,7 @@ def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedel
 	return duration
 
 def graceful_shutdown():
+	schedule.clear()
 	for guild_id in vc_timelog:
 		member_id_list = list(vc_timelog[guild_id].keys())
 		for member_id in member_id_list:
