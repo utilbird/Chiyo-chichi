@@ -237,6 +237,7 @@ def graceful_shutdown():
 
 def restart_bot():
 	print('Restarting...')
+	graceful_shutdown()
 	if os.system('git pull') != 0:
 		return
 	python = sys.executable
