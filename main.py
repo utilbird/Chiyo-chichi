@@ -236,10 +236,14 @@ def graceful_shutdown():
 			if member:
 				update_leaderboard(member, True)
 
-def restart_bot():
+def restart_bot(channel: discord.TextChannel = None):
 	print('Restarting...')
 	graceful_shutdown()
-	if os.system('git pull') != 0:
+	if channel:
+		with open('store/update.log', 'w') as f:
+			f.write(channel.id)
+			f.write('\n')
+	if os.system('git pull >> store/update.log') != 0:
 		return
 	python = sys.executable
 	os.execv(python, [python] + sys.argv)
@@ -251,6 +255,15 @@ def restart_bot():
 @bot.event
 async def on_ready():
 	print(f'Logged in as {bot.user}')
+	if os.path.exists('store/update.log'):
+		try: 
+			with open('store/update.log', 'r') as f:
+				channel = bot.get_channel(int(f.readline()))
+				await channel.send(f'```{'\n'.join(f.readlines())}```')
+		except Exception as e:
+			print(e)
+		finally:
+			os.remove('store/update.log')
 	schedule.every().monday.at('00:00', timezone).do(reset_weekly_leaderboard)
 	for guild in bot.guilds:
 		for vc in guild.voice_channels:
@@ -385,7 +398,7 @@ async def update(ctx: commands.Context):
 	if(config['restart_special_message']):
 		rmsg += f'\n{config['restart_special_message']}'
 	await ctx.send(rmsg)
-	restart_bot()
+	restart_bot(ctx.channel)
 	await ctx.send('Update failed.')
 
 @bot.command()
