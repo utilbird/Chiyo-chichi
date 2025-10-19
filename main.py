@@ -38,12 +38,6 @@ intents.guild_reactions = True
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.DefaultHelpCommand(width = 100, no_category='Commands'))
 
 ### METHODS ###
-def restart_bot():
-	print('Restarting...')
-	if os.system('git pull') != 0:
-		return
-	python = sys.executable
-	os.execv(python, [python] + sys.argv)
 
 def initialize_leaderboard(guild: discord.Guild) -> dict:
 	announce_channel = 0
@@ -233,6 +227,20 @@ def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedel
 		leaderboard_begin_track(member)
 	return duration
 
+def graceful_shutdown():
+	for guild_id in vc_timelog:
+		member_id_list = list(vc_timelog[guild_id].keys())
+		for member_id in member_id_list:
+			member = bot.get_guild(guild_id).get_member(member_id)
+			if member:
+				update_leaderboard(member, True)
+
+def restart_bot():
+	print('Restarting...')
+	if os.system('git pull') != 0:
+		return
+	python = sys.executable
+	os.execv(python, [python] + sys.argv)
 
 ### BOT EVENTS ###
 
@@ -242,6 +250,10 @@ def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedel
 async def on_ready():
 	print(f'Logged in as {bot.user}')
 	schedule.every().monday.at('00:00', timezone).do(reset_weekly_leaderboard)
+	for guild in bot.guilds:
+		for vc in guild.voice_channels:
+			for member in vc.members:
+				leaderboard_begin_track(member)
 	if config['lavalink_enable'] and not hasattr(bot, 'lavalink'):
 		bot.lavalink = lavalink.Client(bot.user.id)
 		bot.lavalink.add_node(config['lavalink_host'],
