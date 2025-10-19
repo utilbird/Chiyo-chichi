@@ -310,7 +310,7 @@ async def on_message(message: discord.Message):
 async def leaderboard(ctx: commands.Context, category: str = 'current'):
 	"""Displays voice channel activity rankings"""
 	if ctx.guild.id in vc_timelog and vc_timelog[ctx.guild.id]:
-		member_id_list = vc_timelog[ctx.guild.id].keys()
+		member_id_list = list(vc_timelog[ctx.guild.id].keys())
 		for member_id in member_id_list:
 			member = ctx.guild.get_member(member_id)
 			if member:
