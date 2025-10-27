@@ -2,6 +2,7 @@ import os
 import sys
 import json
 import discord
+import logging
 import datetime
 import re
 import random
@@ -12,6 +13,8 @@ from discord.ext import commands, tasks
 
 if not os.path.isdir('store'):
 	os.mkdir('store')
+
+log = logging.getLogger(__name__)
 
 # Tracking user vc join/leave times
 vc_timelog = {}
@@ -59,8 +62,7 @@ def add_leaderboard_time(member: discord.Member, duration: datetime.timedelta):
 	except FileNotFoundError:
 		jdata = {}
 	except json.JSONDecodeError as e:
-		print('ALERT: JSON decode error for leaderboard.json')
-		print(e)
+		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
 		jdata = {}
 	guild_id = str(member.guild.id)
 	if guild_id not in jdata:
@@ -82,11 +84,10 @@ def get_leaderboard(guild: discord.Guild, category: str):
 		with open('store/leaderboard.json', 'r') as f:
 			jdata = json.load(f)
 	except FileNotFoundError:
-		print('ALERT: leaderboard file not found')
+		log.warning('ALERT: leaderboard file not found')
 		return
 	except json.JSONDecodeError as e:
-		print('ALERT: JSON decode error for leaderboard.json')
-		print(e)
+		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
 		return
 	if guild_id not in jdata:
 		return
@@ -138,8 +139,7 @@ def set_leaderboard_channel(guild: discord.Guild, channel: discord.TextChannel) 
 	except FileNotFoundError:
 		jdata = {guild_id: initialize_leaderboard(guild)}
 	except json.JSONDecodeError as e:
-		print('ALERT: JSON decode error for leaderboard.json')
-		print(e)
+		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
 		return 'JSON decode error. Contact developer'
 	if guild_id not in jdata:
 		jdata[guild_id] = initialize_leaderboard(guild)
@@ -152,22 +152,21 @@ def set_leaderboard_channel(guild: discord.Guild, channel: discord.TextChannel) 
 async def send_message_channel(message, id: int, embed = None):
 	channel = bot.get_channel(id)
 	if not channel:
-		print(f'ALERT: channel ID {id} could not be located')
+		log.info(f'ALERT: channel ID {id} could not be located')
 		return
 	await channel.send(message, embed=embed)
 
 def reset_weekly_leaderboard():
-	print('Resetting weekly leaderboard...')
+	log.info('Resetting weekly leaderboard...')
 	jdata = {}
 	try:
 		with open('store/leaderboard.json', 'r') as f:
 			jdata = json.load(f)
 	except FileNotFoundError:
-		print('ALERT: leaderboard file not found')
+		log.warning('ALERT: leaderboard file not found')
 		return
 	except json.JSONDecodeError as e:
-		print('ALERT: JSON decode error for leaderboard.json')
-		print(e)
+		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
 		return
 	for guild_id in jdata:
 		channelID = int(jdata[guild_id]['lb_announce_channel'])
@@ -233,7 +232,7 @@ def leaderboard_begin_track(member: discord.Member):
 def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedelta | None:
 	guild_id = member.guild.id
 	if guild_id not in vc_timelog or member.id not in vc_timelog[guild_id]:
-		print(f'{member.display_name} left a voice channel (or had lb status updated), but join time not found (bot might have restarted).')
+		log.info(f'{member.display_name} left a voice channel (or had lb status updated), but join time not found (bot might have restarted).')
 		return
 	join_time = vc_timelog[guild_id].pop(member.id)
 	duration = datetime.datetime.now() - join_time
@@ -259,7 +258,7 @@ def graceful_shutdown():
 				update_leaderboard(member, True)
 
 def restart_bot(channel: discord.TextChannel = None):
-	print('Restarting...')
+	log.info('Restarting...')
 	graceful_shutdown()
 	update_cmd = 'git pull'
 	if channel:
@@ -278,17 +277,17 @@ def restart_bot(channel: discord.TextChannel = None):
 
 @bot.event
 async def on_ready():
-	print(f'Logged in as {bot.user}')
+	log.info(f'Logged in as {bot.user}')
 	if os.path.exists('store/update.log'):
 		try: 
 			with open('store/update.log', 'r') as f:
 				channel = bot.get_channel(int(f.readline()))
 				await channel.send(f'```{'\n'.join(f.readlines())}```')
 		except Exception as e:
-			print(e)
+			log.error(e)
 		finally:
 			os.remove('store/update.log')
-	schedule.every().tuesday.at('00:39:00').do(reset_weekly_leaderboard)
+	schedule.every().tuesday.at('00:39:00', config['timezone']).do(reset_weekly_leaderboard)
 	for guild in bot.guilds:
 		for vc in guild.voice_channels:
 			for member in vc.members:
@@ -467,6 +466,5 @@ async def play(ctx: commands.Context, *, query):
 @tasks.loop(seconds=1)
 async def schedule_controller():
 	schedule.run_pending()
-	sys.stdout.flush()
 
 bot.run(config['token'])
