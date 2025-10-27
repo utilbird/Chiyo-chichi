@@ -288,7 +288,7 @@ async def on_ready():
 			print(e)
 		finally:
 			os.remove('store/update.log')
-	schedule.every().tuesday.at('00:33:00').do(reset_weekly_leaderboard)
+	schedule.every().tuesday.at('00:39:00').do(reset_weekly_leaderboard)
 	for guild in bot.guilds:
 		for vc in guild.voice_channels:
 			for member in vc.members:
@@ -467,5 +467,6 @@ async def play(ctx: commands.Context, *, query):
 @tasks.loop(seconds=1)
 async def schedule_controller():
 	schedule.run_pending()
+	sys.stdout.flush()
 
 bot.run(config['token'])
