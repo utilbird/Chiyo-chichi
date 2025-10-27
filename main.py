@@ -288,7 +288,7 @@ async def on_ready():
 			print(e)
 		finally:
 			os.remove('store/update.log')
-	schedule.every().tuesday.at('00:20', timezone).do(reset_weekly_leaderboard)
+	schedule.every().tuesday.at('00:25', config['timezone']).do(reset_weekly_leaderboard)
 	for guild in bot.guilds:
 		for vc in guild.voice_channels:
 			for member in vc.members:
