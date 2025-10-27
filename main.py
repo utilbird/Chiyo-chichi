@@ -3,11 +3,12 @@ import sys
 import json
 import discord
 import datetime
+import re
 import random
 import schedule
 import pytz
 import lavalink
-from discord.ext import commands
+from discord.ext import commands, tasks
 
 if not os.path.isdir('store'):
 	os.mkdir('store')
@@ -21,6 +22,10 @@ with open('store/config.json', 'r') as f:
 
 # shhhh
 poison = ''
+# Courtesy of https://stackoverflow.com/a/51916936
+tdregex = re.compile(r'^((?P<days>[\.\d]+?)d)?((?P<hours>[\.\d]+?)h)?((?P<minutes>[\.\d]+?)m)?((?P<seconds>[\.\d]+?)s)?$')
+
+reminders = {}
 
 timezone = pytz.timezone(config['timezone'])
 conversation_log_interval = datetime.timedelta(seconds=config['conversation_log_interval']) # Minimum time between logging a message for conversation
@@ -64,7 +69,7 @@ def add_leaderboard_time(member: discord.Member, duration: datetime.timedelta):
 	for category in ['current', 'total']:
 		if member_id not in jdata[guild_id][category]:
 			jdata[guild_id][category][member_id] = 0
-		jdata[guild_id][category][member_id] += int(duration.seconds)
+		jdata[guild_id][category][member_id] += int(duration.total_seconds())
 	
 	with open('store/leaderboard.json', 'w') as f:
 		json.dump(jdata, f, indent=4)
@@ -144,6 +149,13 @@ def set_leaderboard_channel(guild: discord.Guild, channel: discord.TextChannel) 
 		json.dump(jdata, f, indent=4)
 	return 'Success'
 
+async def send_message_channel(message, id: int, embed = None):
+	channel = bot.get_channel(id)
+	if not channel:
+		print(f'ALERT: channel ID {id} could not be located')
+		return
+	await channel.send(message, embed=embed)
+
 def reset_weekly_leaderboard():
 	print('Resetting weekly leaderboard...')
 	jdata = {}
@@ -158,12 +170,13 @@ def reset_weekly_leaderboard():
 		print(e)
 		return
 	for guild_id in jdata:
-		if int(jdata[guild_id]['lb_announce_channel']) != 0:
+		channelID = int(jdata[guild_id]['lb_announce_channel'])
+		if channelID != 0:
 			guild = bot.get_guild(int(guild_id))
 			embed = get_leaderboard_embed(guild, 'current')
-			channel = guild.get_channel(int(jdata[guild_id]['lb_announce_channel']))
-			if channel and embed:
-				bot.loop.create_task(channel.send(embed=embed))
+			channelID = int(jdata[guild_id]['lb_announce_channel'])
+			if embed:
+				bot.loop.create_task(send_message_channel(None, channelID, embed=embed))
 		for member in jdata[guild_id]['current']:
 			if jdata[guild_id]['current'][member] > jdata[guild_id]['top'][member]:
 				jdata[guild_id]['top'][member] = jdata[guild_id]['current'][member]
@@ -226,6 +239,13 @@ def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedel
 	if not remove:
 		leaderboard_begin_track(member)
 	return duration
+
+def remind(memberID: int, channelID: int, message):
+	bot.loop.create_task(send_message_channel(f'<@{memberID}> {message}', channelID))
+	return schedule.CancelJob()
+
+def add_reminder(memberID: int, channelID: int, message, td: datetime.timedelta):
+	schedule.every(int(td.total_seconds())).seconds.do(remind, memberID, channelID, message)
 
 def graceful_shutdown():
 	schedule.clear()
@@ -404,6 +424,17 @@ async def update(ctx: commands.Context):
 	await ctx.send('Update failed.')
 
 @bot.command()
+async def remind(ctx: commands.Context, message):
+	substrs = tdregex.match(message)
+	if not substrs:
+		return await ctx.send('Invalid format. Examples of valid formats: *2d* / *1d6h20m* / *30m20s*')
+	param_dict = {name: float(param)
+				for name, param in substrs.groupdict().items() if param}
+	td = datetime.timedelta(**param_dict)
+	add_reminder(td)
+	await ctx.send('ok :)')
+
+@bot.command()
 async def play(ctx: commands.Context, *, query):
 	"""Play music via link/search query"""
 	if not config['lavalink_enable']:
@@ -431,5 +462,8 @@ async def play(ctx: commands.Context, *, query):
 	else:
 		await ctx.send(f"Added to queue: {track.title}")
 
+@tasks.loop(seconds=1)
+async def schedule_controller():
+	schedule.run_pending()
 
 bot.run(config['token'])
