@@ -189,6 +189,8 @@ def conversation_catalog(message: discord.Message, force: bool = False):
 	"""Record messages ocassionally to randomly respond with"""
 	now = datetime.datetime.now()
 	if force or message.guild.id not in clog_next_record or clog_next_record[message.guild.id] < now:
+		if bot.user in message.mentions:
+			return
 		# uncomment if gay
 		#if message.mention_everyone:
 		#	return
