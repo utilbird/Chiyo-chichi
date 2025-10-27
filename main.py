@@ -102,10 +102,10 @@ def get_leaderboard_embed(guild: discord.Guild, category: str) -> discord.Embed 
 	match category:
 		case 'current':
 			pretitle = 'Weekly'
-			footer = f'Resets 12AM Monday morning ({timezone}).'
+			footer = f'Resets 12AM Tuesday morning ({timezone}).'
 		case 'top':
 			pretitle = 'Highest Weekly'
-			footer = f'Updates 12AM Monday morning ({timezone}).'
+			footer = f'Updates 12AM Tuesday morning ({timezone}).'
 		case 'total':
 			pretitle = 'Total'
 			footer = 'Total time spent in VC since this bot has joined.'
@@ -286,7 +286,7 @@ async def on_ready():
 			print(e)
 		finally:
 			os.remove('store/update.log')
-	schedule.every().monday.at('00:00', timezone).do(reset_weekly_leaderboard)
+	schedule.every().tuesday.at('00:00', timezone).do(reset_weekly_leaderboard)
 	for guild in bot.guilds:
 		for vc in guild.voice_channels:
 			for member in vc.members:
