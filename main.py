@@ -23,8 +23,6 @@ config = {}
 with open('store/config.json', 'r') as f:
 	config = json.load(f)
 
-# shhhh
-poison = ''
 # Courtesy of https://stackoverflow.com/a/51916936
 tdregex = re.compile(r'^((?P<days>[\.\d]+?)d)?((?P<hours>[\.\d]+?)h)?((?P<minutes>[\.\d]+?)m)?((?P<seconds>[\.\d]+?)s)?$')
 
@@ -214,11 +212,6 @@ def conversation_response(message: discord.Message) -> str | None:
 	now = datetime.datetime.now()
 	if message.guild.id not in clog_next_response or clog_next_response[message.guild.id] < now or bot.user in message.mentions:
 		if (random.random() <= res_chance or bot.user in message.mentions) and os.path.exists('store/conversation.txt'):
-			global poison
-			if len(poison):
-				r = poison
-				poison = ''
-				return r
 			clog_next_response[message.guild.id] = now + conversation_response_interval
 			with open('store/conversation.txt', 'r', encoding='utf-8') as f:
 				return random.choice(f.readlines()).replace('\\n', '\n')
@@ -269,7 +262,8 @@ def restart_bot(channel: discord.TextChannel = None):
 	if os.system(update_cmd) != 0:
 		return
 	python = sys.executable
-	os.execv(python, [python] + sys.argv)
+	quit()
+	#os.execv(python, [python] + sys.argv)
 
 ### BOT EVENTS ###
 
@@ -341,11 +335,6 @@ async def on_voice_state_update(member, before, after):
 @bot.event
 async def on_message(message: discord.Message):
 	if(message.author.id == bot.user.id):
-		return
-	if(isinstance(message.channel, discord.DMChannel)):
-		if(message.author.id == config['dev_user_id']):
-			global poison
-			poison = message.content
 		return
 	if(message.content and message.content[0] == '!'):
 		await bot.process_commands(message)
