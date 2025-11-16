@@ -517,4 +517,7 @@ async def spaceweather(ctx: commands.Context):
 async def schedule_controller():
 	schedule.run_pending()
 
+@tasks.loop(hours=12)
+async def weatherupdate():
+	return
 bot.run(config['token'])
