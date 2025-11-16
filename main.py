@@ -176,7 +176,8 @@ def reset_weekly_leaderboard():
 			if embed:
 				bot.loop.create_task(send_message_channel(None, channelID, embed=embed))
 		for member in jdata[guild_id]['current']:
-			if jdata[guild_id]['current'][member] > jdata[guild_id]['top'][member]:
+			# if we're not in the 'top' leaderboard, add our score. Otherwise we only replace it if this week has a higher score
+			if member not in jdata[guild_id]['top'] or jdata[guild_id]['current'][member] > jdata[guild_id]['top'][member]:
 				jdata[guild_id]['top'][member] = jdata[guild_id]['current'][member]
 			jdata[guild_id]['current'][member] = 0
 	with open('store/leaderboard.json', 'w') as f:
