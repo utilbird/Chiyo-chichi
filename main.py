@@ -102,10 +102,10 @@ def get_leaderboard_embed(guild: discord.Guild, category: str) -> discord.Embed 
 	match category:
 		case 'current':
 			pretitle = 'Weekly'
-			footer = f'Resets 12AM Tuesday morning ({timezone}).'
+			footer = f'Resets 12AM Monday morning ({timezone}).'
 		case 'top':
 			pretitle = 'Highest Weekly'
-			footer = f'Updates 12AM Tuesday morning ({timezone}).'
+			footer = f'Updates 12AM Monday morning ({timezone}).'
 		case 'total':
 			pretitle = 'Total'
 			footer = 'Total time spent in VC since this bot has joined.'
@@ -329,7 +329,7 @@ async def on_ready():
 			log.error(e)
 		finally:
 			os.remove('store/update.log')
-	schedule.every().tuesday.at('00:50:00', config['timezone']).do(reset_weekly_leaderboard)
+	schedule.every().monday.at('00:00:30', config['timezone']).do(reset_weekly_leaderboard)
 	for guild in bot.guilds:
 		for vc in guild.voice_channels:
 			for member in vc.members:
@@ -505,6 +505,7 @@ async def weather(ctx: commands.Context, message):
 	"""Gets the weather for a certain area"""
 	await ctx.send('Feature not yet implemented.')
 	return
+
 @bot.command(aliases=['aurora', 'magstorm', 'sweather'])
 async def spaceweather(ctx: commands.Context):
 	res = get_aurora_status()
@@ -513,7 +514,13 @@ async def spaceweather(ctx: commands.Context):
 		return
 	await ctx.send(embed=res)
 
-@tasks.loop(seconds=1)
+@bot.command()
+async def force_update_leaderboard(ctx: commands.Context):
+	if ctx.author.id != config['dev_user_id']:
+		return await ctx.send('no')
+	reset_weekly_leaderboard()
+
+@tasks.loop(seconds=60)
 async def schedule_controller():
 	schedule.run_pending()
 
