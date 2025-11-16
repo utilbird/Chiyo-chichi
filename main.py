@@ -4,6 +4,7 @@ import json
 import discord
 import logging
 import datetime
+import requests
 import re
 import random
 import schedule
@@ -263,7 +264,54 @@ def restart_bot(channel: discord.TextChannel = None):
 		return
 	python = sys.executable
 	quit()
+	# comment above and uncomment below if not using a service manager
 	#os.execv(python, [python] + sys.argv)
+
+def get_aurora_status() -> discord.Embed | None:
+	api = 'https://sws-data.sws.bom.gov.au/api/v1/get-aurora-alert'
+	time_format = '%Y-%m-%d %H:%M:%S'
+	try:
+		response = requests.post(api, json={'api_key': config['bom_spaceweather_apikey']})
+		response.raise_for_status()
+		data = response.json()['data']
+		desc = ''
+		i = 0
+		if data is None:
+			desc = 'No active alerts.'
+		else:
+			for alert in data:
+				i += 1
+				start_time = datetime.datetime.strptime(alert['start_time'], time_format)
+				desc += f'\tStart time: {start_time.astimezone(timezone)}\n'
+				valid_until = datetime.datetime.strptime(alert['valid_until'], time_format)
+				desc += f'\tValid until: {valid_until.astimezone(timezone)}\n'
+				desc += f'\tAlert level: {alert['k_aus']}\n'
+				desc += f'\tLatitude band: {alert['lat_band']}\n'
+				desc += f'\tDescription: {alert['description'].replace('\n', '\n\t')}\n'
+				if i < len(data):
+					desc += '\n\n'
+
+		embed = discord.Embed(title='Aurora Alert', description=desc)
+		embed.set_footer('Information provided by sws-data.sws.bom.gov.au')
+		return embed
+	except requests.HTTPError as e:
+		log.error(f'HTTP error occured while fetching aurora status.\n{e}')
+		try:
+			rjson = response.json()
+			if 'errors' in rjson:
+				log.error(rjson['errors'])
+		except requests.exceptions.JSONDecodeError:
+			pass
+	except requests.ConnectionError as e:
+		log.error(f'Connection error while fetching aurora status.\n{e}')
+	except requests.RequestException as e:
+		log.error(f'Request exception occured while fetching aurora status.\n{e}')
+	except requests.Timeout:
+		log.error(f'Timeout occured while fetching aurora status.')
+	except requests.exceptions.JSONDecodeError as e:
+		log.error(f'Unable to decode JSON from aurora status response.\n{e}')
+
+	
 
 ### BOT EVENTS ###
 
@@ -451,6 +499,19 @@ async def play(ctx: commands.Context, *, query):
 		await ctx.send(f"Now playing: {track.title}")
 	else:
 		await ctx.send(f"Added to queue: {track.title}")
+
+@bot.command()
+async def weather(ctx: commands.Context, message):
+	"""Gets the weather for a certain area"""
+	ctx.send('Feature not yet implemented.')
+	return
+@bot.command(aliases=['aurora', 'magstorm', 'sweather'])
+async def spaceweather(ctx: commands.Context):
+	res = get_aurora_status()
+	if res is None:
+		ctx.send('Error occurred, sorry :(')
+		return
+	ctx.send(embed=res)
 
 @tasks.loop(seconds=1)
 async def schedule_controller():
