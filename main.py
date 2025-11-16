@@ -263,7 +263,7 @@ def restart_bot(channel: discord.TextChannel = None):
 	if os.system(update_cmd) != 0:
 		return
 	python = sys.executable
-	quit()
+	quit(0) # combine with systemd 'Restart=on-success'
 	# comment above and uncomment below if not using a service manager
 	#os.execv(python, [python] + sys.argv)
 
