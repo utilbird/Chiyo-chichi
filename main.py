@@ -503,15 +503,15 @@ async def play(ctx: commands.Context, *, query):
 @bot.command()
 async def weather(ctx: commands.Context, message):
 	"""Gets the weather for a certain area"""
-	ctx.send('Feature not yet implemented.')
+	await ctx.send('Feature not yet implemented.')
 	return
 @bot.command(aliases=['aurora', 'magstorm', 'sweather'])
 async def spaceweather(ctx: commands.Context):
 	res = get_aurora_status()
 	if res is None:
-		ctx.send('Error occurred, sorry :(')
+		await ctx.send('Error occurred, sorry :(')
 		return
-	ctx.send(embed=res)
+	await ctx.send(embed=res)
 
 @tasks.loop(seconds=1)
 async def schedule_controller():
