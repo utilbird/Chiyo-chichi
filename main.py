@@ -276,7 +276,7 @@ def get_aurora_status() -> discord.Embed | None:
 		data = response.json()['data']
 		desc = ''
 		i = 0
-		if data is None:
+		if len(data) == 0:
 			desc = 'No active alerts.'
 		else:
 			for alert in data:
