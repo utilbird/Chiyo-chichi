@@ -292,7 +292,7 @@ def get_aurora_status() -> discord.Embed | None:
 					desc += '\n\n'
 
 		embed = discord.Embed(title='Aurora Alert', description=desc)
-		embed.set_footer('Information provided by sws-data.sws.bom.gov.au')
+		embed.set_footer(text='Information provided by sws-data.sws.bom.gov.au')
 		return embed
 	except requests.HTTPError as e:
 		log.error(f'HTTP error occured while fetching aurora status.\n{e}')
