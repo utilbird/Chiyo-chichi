@@ -178,6 +178,8 @@ async def on_ready():
 			log.error(e)
 		finally:
 			os.remove('store/update.log')
+	for file in os.listdir('cogs'):
+		await bot.load_extension(f'cogs.{file}')
 	if config['lavalink_enable'] and not hasattr(bot, 'lavalink'):
 		bot.lavalink = lavalink.Client(bot.user.id)
 		bot.lavalink.add_node(config['lavalink_host'],
@@ -299,8 +301,5 @@ async def spaceweather(ctx: commands.Context):
 @tasks.loop(hours=12)
 async def weatherupdate():
 	return
-
-for file in os.listdir('cogs'):
-	bot.load_extension(f'cogs.{file}')
 
 bot.run(config['token'])
