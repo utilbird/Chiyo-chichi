@@ -232,5 +232,5 @@ class Leaderboard(commands.Cog, name="Leaderboard"):
 				self.reset_weekly_leaderboard()
 				self.last_lb_update = now
 
-def setup(client):
-	client.add_cog(Leaderboard(client))
+async def setup(client):
+	await client.add_cog(Leaderboard(client))
