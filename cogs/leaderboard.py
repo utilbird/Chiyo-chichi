@@ -231,3 +231,6 @@ class Leaderboard(commands.Cog, name="Leaderboard"):
 			if self.last_lb_update is None or (self.last_lb_update - now).seconds > 3800:
 				self.reset_weekly_leaderboard()
 				self.last_lb_update = now
+
+def setup(client):
+	client.add_cog(Leaderboard(client))
