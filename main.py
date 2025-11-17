@@ -11,14 +11,12 @@ import schedule
 import pytz
 import lavalink
 from discord.ext import commands, tasks
+import helpers
 
 if not os.path.isdir('store'):
 	os.mkdir('store')
 
 log = logging.getLogger(__name__)
-
-# Tracking user vc join/leave times
-vc_timelog = {}
 
 config = {}
 with open('store/config.json', 'r') as f:
@@ -43,145 +41,9 @@ intents.guild_messages = True
 intents.guild_reactions = True
 
 bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.DefaultHelpCommand(width = 100, no_category='Commands'))
+bot.config = config
 
 ### METHODS ###
-
-def initialize_leaderboard(guild: discord.Guild) -> dict:
-	announce_channel = 0
-	for channel in guild.text_channels:
-		if channel.name.lower() == 'general':
-			announce_channel = channel.id
-	return {'current': {}, 'top': {}, 'total': {}, 'lb_announce_channel': str(announce_channel)}
-
-def add_leaderboard_time(member: discord.Member, duration: datetime.timedelta):
-	jdata = {}
-	try:
-		with open('store/leaderboard.json', 'r') as f:
-			jdata = json.load(f)
-	except FileNotFoundError:
-		jdata = {}
-	except json.JSONDecodeError as e:
-		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
-		jdata = {}
-	guild_id = str(member.guild.id)
-	if guild_id not in jdata:
-		jdata[guild_id] = initialize_leaderboard(member.guild)
-	member_id = str(member.id)
-	for category in ['current', 'total']:
-		if member_id not in jdata[guild_id][category]:
-			jdata[guild_id][category][member_id] = 0
-		jdata[guild_id][category][member_id] += int(duration.total_seconds())
-	
-	with open('store/leaderboard.json', 'w') as f:
-		json.dump(jdata, f, indent=4)
-
-def get_leaderboard(guild: discord.Guild, category: str):
-	"""Returns a dictionary of members and their VC time"""
-	jdata = {}
-	guild_id = str(guild.id)
-	try:
-		with open('store/leaderboard.json', 'r') as f:
-			jdata = json.load(f)
-	except FileNotFoundError:
-		log.warning('ALERT: leaderboard file not found')
-		return
-	except json.JSONDecodeError as e:
-		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
-		return
-	if guild_id not in jdata:
-		return
-	lb = jdata[guild_id][category]
-	if lb is not None:
-		return sorted(lb.items(), key=lambda item: item[1], reverse=True)
-
-def get_leaderboard_embed(guild: discord.Guild, category: str) -> discord.Embed | None:
-	desc = ''
-	pretitle = ''
-	footer = ''
-	category = str.lower(category)
-	match category:
-		case 'current':
-			pretitle = 'Weekly'
-			footer = f'Resets 12AM Monday morning ({timezone}).'
-		case 'top':
-			pretitle = 'Highest Weekly'
-			footer = f'Updates 12AM Monday morning ({timezone}).'
-		case 'total':
-			pretitle = 'Total'
-			footer = 'Total time spent in VC since this bot has joined.'
-		case _:
-			return
-	lb = get_leaderboard(guild, category)
-	i = 0
-	if lb is not None:
-		for entry in lb:
-			if entry[1] == 0:
-				continue
-			i += 1
-			user = bot.get_user(int(entry[0]))
-			duration = datetime.timedelta(seconds=entry[1])
-			desc += f'**{i}.**\t\t{user.display_name} - {duration}\n'
-		if len(desc) == 0:
-			desc = 'No recorded activity.'
-	else:
-		desc = 'No recorded activity.'
-	embed = discord.Embed(title=f'{pretitle} VC Activity', description=desc)
-	embed.set_footer(text=footer)
-	return embed
-	
-def set_leaderboard_channel(guild: discord.Guild, channel: discord.TextChannel) -> str:
-	jdata = {}
-	guild_id = str(guild.id)
-	try:
-		with open('store/leaderboard.json', 'r') as f:
-			jdata = json.load(f)
-	except FileNotFoundError:
-		jdata = {guild_id: initialize_leaderboard(guild)}
-	except json.JSONDecodeError as e:
-		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
-		return 'JSON decode error. Contact developer'
-	if guild_id not in jdata:
-		jdata[guild_id] = initialize_leaderboard(guild)
-	jdata[guild_id]['lb_announce_channel'] = str(channel.id)
-
-	with open('store/leaderboard.json', 'w') as f:
-		json.dump(jdata, f, indent=4)
-	return 'Success'
-
-async def send_message_channel(message, id: int, embed = None):
-	channel = bot.get_channel(id)
-	if not channel:
-		log.info(f'ALERT: channel ID {id} could not be located')
-		return
-	await channel.send(message, embed=embed)
-
-def reset_weekly_leaderboard():
-	log.info('Resetting weekly leaderboard...')
-	jdata = {}
-	try:
-		with open('store/leaderboard.json', 'r') as f:
-			jdata = json.load(f)
-	except FileNotFoundError:
-		log.warning('ALERT: leaderboard file not found')
-		return
-	except json.JSONDecodeError as e:
-		log.warning(f'ALERT: JSON decode error for leaderboard.json, {e}', exc_info=True)
-		return
-	for guild_id in jdata:
-		channelID = int(jdata[guild_id]['lb_announce_channel'])
-		if channelID != 0:
-			guild = bot.get_guild(int(guild_id))
-			embed = get_leaderboard_embed(guild, 'current')
-			channelID = int(jdata[guild_id]['lb_announce_channel'])
-			if embed:
-				bot.loop.create_task(send_message_channel(None, channelID, embed=embed))
-		for member in jdata[guild_id]['current']:
-			# if we're not in the 'top' leaderboard, add our score. Otherwise we only replace it if this week has a higher score
-			if member not in jdata[guild_id]['top'] or jdata[guild_id]['current'][member] > jdata[guild_id]['top'][member]:
-				jdata[guild_id]['top'][member] = jdata[guild_id]['current'][member]
-			jdata[guild_id]['current'][member] = 0
-	with open('store/leaderboard.json', 'w') as f:
-		json.dump(jdata, f, indent=4)
 
 clog_next_record = {}
 def conversation_catalog(message: discord.Message, force: bool = False):
@@ -218,39 +80,18 @@ def conversation_response(message: discord.Message) -> str | None:
 			with open('store/conversation.txt', 'r', encoding='utf-8') as f:
 				return random.choice(f.readlines()).replace('\\n', '\n')
 
-def leaderboard_begin_track(member: discord.Member):
-	guild_id = member.guild.id
-	if guild_id not in vc_timelog:
-		vc_timelog[guild_id] = {}
-	vc_timelog[guild_id][member.id] = datetime.datetime.now()
-
-def update_leaderboard(member: discord.Member, remove: bool) -> datetime.timedelta | None:
-	guild_id = member.guild.id
-	if guild_id not in vc_timelog or member.id not in vc_timelog[guild_id]:
-		log.info(f'{member.display_name} left a voice channel (or had lb status updated), but join time not found (bot might have restarted).')
-		return
-	join_time = vc_timelog[guild_id].pop(member.id)
-	duration = datetime.datetime.now() - join_time
-	add_leaderboard_time(member, duration)
-	if not remove:
-		leaderboard_begin_track(member)
-	return duration
-
 def remind(memberID: int, channelID: int, message):
-	bot.loop.create_task(send_message_channel(f'<@{memberID}> {message}', channelID))
+	helpers.send_message(f'<@{memberID}> {message}', channelID)
 	return schedule.CancelJob()
 
 def add_reminder(memberID: int, channelID: int, message, td: datetime.timedelta):
 	schedule.every(int(td.total_seconds())).seconds.do(remind, memberID, channelID, message)
 
 def graceful_shutdown():
+	lb = bot.get_cog('Leaderboard')
+	if lb is not None:
+		lb.on_shutdown()
 	schedule.clear()
-	for guild_id in vc_timelog:
-		member_id_list = list(vc_timelog[guild_id].keys())
-		for member_id in member_id_list:
-			member = bot.get_guild(guild_id).get_member(member_id)
-			if member:
-				update_leaderboard(member, True)
 
 def restart_bot(channel: discord.TextChannel = None):
 	log.info('Restarting...')
@@ -269,6 +110,7 @@ def restart_bot(channel: discord.TextChannel = None):
 	#os.execv(python, [python] + sys.argv)
 
 def get_aurora_status() -> discord.Embed | None:
+	tzinfo = datetime.datetime.now().astimezone().tzinfo
 	api = 'https://sws-data.sws.bom.gov.au/api/v1/get-aurora-alert'
 	time_format = '%Y-%m-%d %H:%M:%S'
 	try:
@@ -283,9 +125,9 @@ def get_aurora_status() -> discord.Embed | None:
 			for alert in data:
 				i += 1
 				start_time = datetime.datetime.strptime(alert['start_time'], time_format)
-				desc += f'\tStart time: {start_time.astimezone(timezone)}\n'
+				desc += f'\tStart time: {start_time.astimezone(tzinfo)}\n'
 				valid_until = datetime.datetime.strptime(alert['valid_until'], time_format)
-				desc += f'\tValid until: {valid_until.astimezone(timezone)}\n'
+				desc += f'\tValid until: {valid_until.astimezone(tzinfo)}\n'
 				desc += f'\tAlert level: {alert['k_aus']}\n'
 				desc += f'\tLatitude band: {alert['lat_band']}\n'
 				desc += f'\tDescription: {alert['description'].replace('\n', '\n\t')}\n'
@@ -315,8 +157,14 @@ def get_aurora_status() -> discord.Embed | None:
 	
 
 ### BOT EVENTS ###
-
-
+#@bot.event
+#async def on_voice_state_update(self, member, before, after):
+#	# lavalink
+#	if member.id == self.bot.user.id and before.channel and not after.channel:
+#		# Bot was disconnected from voice
+#		player = self.bot.lavalink.get_player(member.guild.id)
+#		if player:
+#			await player.destroy()
 
 @bot.event
 async def on_ready():
@@ -330,11 +178,6 @@ async def on_ready():
 			log.error(e)
 		finally:
 			os.remove('store/update.log')
-	schedule.every().monday.at('00:00:30', config['timezone']).do(reset_weekly_leaderboard)
-	for guild in bot.guilds:
-		for vc in guild.voice_channels:
-			for member in vc.members:
-				leaderboard_begin_track(member)
 	if config['lavalink_enable'] and not hasattr(bot, 'lavalink'):
 		bot.lavalink = lavalink.Client(bot.user.id)
 		bot.lavalink.add_node(config['lavalink_host'],
@@ -342,44 +185,6 @@ async def on_ready():
 						config['lavalink_password'],
 						config['lavalink_region'],
 						config['lavalink_name'])
-
-@bot.event
-async def on_voice_state_update(member, before, after):
-	# lavalink
-	if member.id == bot.user.id and before.channel and not after.channel:
-		# Bot was disconnected from voice
-		player = bot.lavalink.get_player(member.guild.id)
-		if player:
-			await player.destroy()
-	# leaderboard
-	guild_id = member.guild.id
-	user_id = member.id
-
-	# User joined a voice channel
-	if before.channel is None and after.channel is not None:
-		leaderboard_begin_track(member)
-		print(f'{member.display_name} joined {after.channel.name} at {vc_timelog[guild_id][user_id]}')
-
-	# User left a voice channel
-	elif before.channel is not None and after.channel is None:
-		update_leaderboard(member, True)
-		print(f'{member.display_name} left {before.channel.name}')
-
-	# User switched voice channels
-	#elif before.channel is not None and after.channel is not None and before.channel != after.channel:
-	#	if guild_id in vc_timelog and user_id in vc_timelog[guild_id]:
-	#		join_time = vc_timelog[guild_id].pop(user_id)
-	#		duration = datetime.datetime.now() - join_time
-	#		print(f'{member.display_name} switched from {before.channel.name} to {after.channel.name}. Time in old channel: {duration}')
-	#	else:
-	#		print(f'{member.display_name} switched channels, but join time not found (bot might have restarted).')
-	#	
-	#	# Record new join time for the new channel
-	#	if guild_id not in vc_timelog:
-	#		vc_timelog[guild_id] = {}
-	#	vc_timelog[guild_id][user_id] = datetime.datetime.now()
-	#	print(f'{member.display_name} joined {after.channel.name} at {vc_timelog[guild_id][user_id]}')
-	
 
 @bot.event
 async def on_message(message: discord.Message):
@@ -392,30 +197,6 @@ async def on_message(message: discord.Message):
 	response = conversation_response(message)
 	if response:
 		await message.channel.send(response)
-	
-
-@bot.command()
-async def leaderboard(ctx: commands.Context, category: str = 'current'):
-	"""Displays voice channel activity rankings"""
-	if ctx.guild.id in vc_timelog and vc_timelog[ctx.guild.id]:
-		member_id_list = list(vc_timelog[ctx.guild.id].keys())
-		for member_id in member_id_list:
-			member = ctx.guild.get_member(member_id)
-			if member:
-				update_leaderboard(member, False)
-	embed = get_leaderboard_embed(ctx.guild, category)
-	if embed:
-		await ctx.send(embed=embed)
-	else:
-		await ctx.send('Unknown category. Choose from current|top|total.')
-
-@bot.command()
-async def lbchannel(ctx: commands.Context, channel: discord.TextChannel):
-	"""Set weekly VC activity leaderboard report channel"""
-	if ctx.author.guild_permissions.manage_channels == False:
-		return await ctx.send('Insufficient permissions.')
-	msg = set_leaderboard_channel(ctx.guild, channel)
-	await ctx.send(msg)
 
 @bot.command(aliases=['spin', 'wheelspin'])
 async def wheel(ctx: commands.Context):
@@ -515,12 +296,6 @@ async def spaceweather(ctx: commands.Context):
 		return
 	await ctx.send(embed=res)
 
-@bot.command()
-async def force_update_leaderboard(ctx: commands.Context):
-	if ctx.author.id != config['dev_user_id']:
-		return await ctx.send('no')
-	reset_weekly_leaderboard()
-
 @tasks.loop(seconds=60)
 async def schedule_controller():
 	schedule.run_pending()
@@ -528,4 +303,7 @@ async def schedule_controller():
 @tasks.loop(hours=12)
 async def weatherupdate():
 	return
+
+for file in os.listdir('cogs'):
+	bot.load_extension(f'cogs.{file}')
 bot.run(config['token'])
