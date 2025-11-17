@@ -5,7 +5,7 @@ import datetime
 import json
 import logging
 
-class Leaderboard(commands.Cog, name="Leaderboard"):
+class Leaderboard(commands.Cog, name='Leaderboard'):
 	# Tracking user vc join/leave times
 	vc_timelog = {}
 	# last time leaderboard was updated

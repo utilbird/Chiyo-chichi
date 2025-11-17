@@ -201,29 +201,6 @@ async def on_message(message: discord.Message):
 	if response:
 		await message.channel.send(response)
 
-@bot.command(aliases=['spin', 'wheelspin'])
-async def wheel(ctx: commands.Context):
-	"""Picks a random user from voice channel participants or arguments"""
-	selected = None
-	if ctx.message.mentions:
-		selected = random.choice(ctx.message.mentions)
-	elif ctx.message.author.voice and ctx.message.author.voice.channel:
-		selected = random.choice(ctx.message.author.voice.channel.members)
-	elif ctx.message.mention_everyone or 'everyone' in ctx.message.content:
-		selected = random.choice(ctx.channel.members)
-	else:
-		return await ctx.send('Invalid command usage. Must mention users in command argument or be in a voice channel.')
-	if selected is None:
-		return await ctx.send('Error. No valid users found, contact dev.')
-	await ctx.send(f'<@{selected.id}>')
-
-@bot.command(aliases=['flip', 'coin'])
-async def coinflip(ctx: commands.Context):
-	"""Flip a coin"""
-	outcomes = [':flushed:\nHeads', ':snake:\nTails', 'Woah - It landed completely upright!?']
-	probs = [49.95, 49.95, 0.1]
-	await ctx.send(random.choices(outcomes, probs, k=1)[0])
-	
 @bot.command()
 async def catchup(ctx: commands.Context, limit = 5000):
 	"""Goes through previous channel history to update quote DB. argument specifies how far to look back (default=5000)"""
@@ -232,7 +209,7 @@ async def catchup(ctx: commands.Context, limit = 5000):
 	await ctx.send('Gathering quotes...')
 	async for msg in ctx.channel.history(limit=limit):
 		conversation_catalog(msg, True)
-	await ctx.send(f'Finished. Gathered ~{limit} quotes.')\
+	await ctx.send(f'Finished. Gathered ~{limit} quotes.')
 
 @bot.command()
 async def update(ctx: commands.Context):
