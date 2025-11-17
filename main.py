@@ -179,7 +179,8 @@ async def on_ready():
 		finally:
 			os.remove('store/update.log')
 	for file in os.listdir('cogs'):
-		await bot.load_extension(f'cogs.{file[:-3]}')
+		if file.endswith('.py'):
+			await bot.load_extension(f'cogs.{file[:-3]}')
 	if config['lavalink_enable'] and not hasattr(bot, 'lavalink'):
 		bot.lavalink = lavalink.Client(bot.user.id)
 		bot.lavalink.add_node(config['lavalink_host'],
