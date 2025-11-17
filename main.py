@@ -296,14 +296,11 @@ async def spaceweather(ctx: commands.Context):
 		return
 	await ctx.send(embed=res)
 
-@tasks.loop(seconds=60)
-async def schedule_controller():
-	schedule.run_pending()
-
 @tasks.loop(hours=12)
 async def weatherupdate():
 	return
 
 for file in os.listdir('cogs'):
 	bot.load_extension(f'cogs.{file}')
+
 bot.run(config['token'])
