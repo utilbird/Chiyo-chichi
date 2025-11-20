@@ -28,8 +28,6 @@ tdregex = re.compile(r'^((?P<days>[\.\d]+?)d)?((?P<hours>[\.\d]+?)h)?((?P<minute
 reminders = {}
 
 timezone = pytz.timezone(config['timezone'])
-conversation_log_interval = datetime.timedelta(seconds=config['conversation_log_interval']) # Minimum time between logging a message for conversation
-conversation_response_interval = datetime.timedelta(seconds=config['conversation_response_interval']) # Minimum time between conversation responses
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -44,41 +42,6 @@ bot = commands.Bot(command_prefix='!', intents=intents, help_command=commands.De
 bot.config = config
 
 ### METHODS ###
-
-clog_next_record = {}
-def conversation_catalog(message: discord.Message, force: bool = False):
-	"""Record messages ocassionally to randomly respond with"""
-	now = datetime.datetime.now()
-	if force or message.guild.id not in clog_next_record or clog_next_record[message.guild.id] < now:
-		if bot.user in message.mentions:
-			return
-		# uncomment if gay
-		#if message.mention_everyone:
-		#	return
-		msg = ''
-		if len(message.content) != 0 and len(message.content) < 200:
-			msg = message.content
-		elif message.attachments and message.attachments[0].content_type and (message.attachments[0].content_type.startswith('image/') or message.attachments[0].content_type.startswith('video/')) and message.attachments[0].url:
-			msg = message.attachments[0].url
-		elif message.embeds and message.embeds[0].url:
-			msg = message.embeds[0].url
-		else:
-			return
-		with open('store/conversation.txt', 'a', encoding="utf-8") as f:
-			f.write(msg.replace('\n','\\n'))
-			f.write('\n')
-		clog_next_record[message.guild.id] = now + conversation_log_interval
-
-res_chance = config['conversation_response_chance']
-clog_next_response = {}
-def conversation_response(message: discord.Message) -> str | None:
-	"""Chance to respond to this message with a random message (return value)"""
-	now = datetime.datetime.now()
-	if message.guild.id not in clog_next_response or clog_next_response[message.guild.id] < now or bot.user in message.mentions:
-		if (random.random() <= res_chance or bot.user in message.mentions) and os.path.exists('store/conversation.txt'):
-			clog_next_response[message.guild.id] = now + conversation_response_interval
-			with open('store/conversation.txt', 'r', encoding='utf-8') as f:
-				return random.choice(f.readlines()).replace('\\n', '\n')
 
 def remind(memberID: int, channelID: int, message):
 	helpers.send_message(f'<@{memberID}> {message}', channelID)
@@ -104,9 +67,9 @@ def restart_bot(channel: discord.TextChannel = None):
 		update_cmd += ' >> store/update.log'
 	if os.system(update_cmd) != 0:
 		return
-	python = sys.executable
 	quit(0) # combine with systemd 'Restart=on-success'
 	# comment above and uncomment below if not using a service manager
+	#python = sys.executable
 	#os.execv(python, [python] + sys.argv)
 
 def get_aurora_status() -> discord.Embed | None:
@@ -188,28 +151,6 @@ async def on_ready():
 						config['lavalink_password'],
 						config['lavalink_region'],
 						config['lavalink_name'])
-
-@bot.event
-async def on_message(message: discord.Message):
-	if(message.author.id == bot.user.id):
-		return
-	if(message.content and message.content[0] == '!'):
-		await bot.process_commands(message)
-		return
-	conversation_catalog(message)
-	response = conversation_response(message)
-	if response:
-		await message.channel.send(response)
-
-@bot.command()
-async def catchup(ctx: commands.Context, limit = 5000):
-	"""Goes through previous channel history to update quote DB. argument specifies how far to look back (default=5000)"""
-	if ctx.author.guild_permissions.administrator == False:
-		return await ctx.send('Insufficient permissions')
-	await ctx.send('Gathering quotes...')
-	async for msg in ctx.channel.history(limit=limit):
-		conversation_catalog(msg, True)
-	await ctx.send(f'Finished. Gathered ~{limit} quotes.')
 
 @bot.command()
 async def update(ctx: commands.Context):
