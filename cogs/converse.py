@@ -61,4 +61,7 @@ class Converse(commands.Cog):
 		self.conversation_catalog(message)
 		response = self.conversation_response(message)
 		if response:
-			await message.channel.send(response)
+			await message.channel.send(response)\
+
+async def setup(client):
+	await client.add_cog(Converse(client))
