@@ -228,7 +228,7 @@ class Leaderboard(commands.Cog, name='Leaderboard'):
 		now = datetime.datetime.now().astimezone()
 		if now.hour == 0 and now.minute < 2 and now.strftime('%A') == "Monday":
 			# There's definately a better way to do this, but this is quick and handles timezone shifts. 3800 is arbitrary, just needs to be between 3600 and less than 604800.
-			if self.last_lb_update is None or (self.last_lb_update - now).seconds > 3800:
+			if self.last_lb_update is None or (now - self.last_lb_update).seconds > 3800:
 				self.reset_weekly_leaderboard()
 				self.last_lb_update = now
 

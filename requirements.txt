@@ -4,3 +4,4 @@ pytz
 tzdata
 requests
 lavalink
+bs4
