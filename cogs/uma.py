@@ -82,9 +82,9 @@ class Uma(commands.Cog, name='Uma'):
 			embed = discord.Embed(title=title, description=message)
 			if entry['image']:
 				embed.set_image(url=entry['image'])
-			footer = '*No date provided.*'
+			footer = 'No date provided.'
 			if entry['post_at']:
-				footer = f'*Announced: {entry['post_at']}*'
+				footer = f'Announced: {entry['post_at']}'
 			embed.set_footer(text=footer)
 			# total embed length limit is 6000 characters
 			total_embed_chars += len(title) + len(message) + len(footer)
