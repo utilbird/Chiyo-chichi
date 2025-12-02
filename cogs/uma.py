@@ -84,8 +84,8 @@ class Uma(commands.Cog, name='Uma'):
 				embed.set_image(url=entry['image'])
 			footer = '*No date provided.*'
 			if entry['post_at']:
-				footer = f'\n\n**Announced: {entry['post_at']}*'
-			embed.set_footer(footer)
+				footer = f'*Announced: {entry['post_at']}*'
+			embed.set_footer(text=footer)
 			# total embed length limit is 6000 characters
 			total_embed_chars += len(title) + len(message) + len(footer)
 			if total_embed_chars > 6000:
