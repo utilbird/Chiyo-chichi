@@ -9,6 +9,7 @@ import helpers
 class Uma(commands.Cog, name='Uma'):
 
 	url = 'https://umamusume.com/api/ajax/pr_info_index?format=json'
+	news_entry_limit = 10
 
 	def __init__(self, bot, *args, **kwargs):
 		self.bot = bot
@@ -45,10 +46,12 @@ class Uma(commands.Cog, name='Uma'):
 		return jdata[serverID]['last_news_id'] == news_id
 
 	@commands.command(aliases=['umabanner'])
-	async def uma(self, ctx: commands.Context, arg: str = ''):
-		"""Displays the current Umamusume news. Use 'all' to see all recent news."""
+	async def uma(self, ctx: commands.Context, force_n: int = 0):
+		"""Displays the current Umamusume news. Provide number to display last x announcements"""
 
-		request = {'announce_label':1, 'limit':10, 'offset':0}
+		request = {'announce_label': 1, 'limit': self.news_entry_limit, 'offset': 0}
+		if force_n > 0:
+			request['limit'] = min(force_n, self.news_entry_limit)
 
 		json = {}
 		try:
@@ -69,7 +72,7 @@ class Uma(commands.Cog, name='Uma'):
 		segmented = False
 		for entry in json['information_list']:
 			# check if we've seen this news before
-			if arg.lower() != 'all' and self.has_seen_news(str(ctx.guild.id), str(entry['announce_id'])):
+			if force_n == 0 and self.has_seen_news(str(ctx.guild.id), str(entry['announce_id'])):
 				break
 			title = f'**{entry['title'].replace('*', '\\*')}**'
 			if len(title) > 256:
@@ -98,7 +101,7 @@ class Uma(commands.Cog, name='Uma'):
 		if len(embeds) > 0:
 			await ctx.send(embeds=embeds)
 		elif not segmented:
-			if arg.lower() == 'all':
+			if force_n != 0:
 				await ctx.send('No announcements found.')
 			else:
 				await ctx.send('No new announcements.')
