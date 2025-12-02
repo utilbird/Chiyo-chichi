@@ -20,7 +20,7 @@ class Uma(commands.Cog, name='Uma'):
 					await ctx.send('Failed to fetch banner information.')
 					return
 				json = response.json()
-		except:
+		except (requests.RequestException, requests.exceptions.JSONDecodeError):
 			await ctx.send('An error occurred while fetching banner information.')
 			return
 
