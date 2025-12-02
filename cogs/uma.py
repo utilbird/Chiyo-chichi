@@ -1,10 +1,13 @@
 import discord
 from discord.ext import commands, tasks
+import logging
 import requests
 
 class Uma(commands.Cog, name='Uma'):
 	def __init__(self, bot, *args, **kwargs):
 		self.bot = bot
+		self.logger = logging.getLogger(__name__)
+		self.logger.setLevel(logging.INFO)
 
 	@commands.command(aliases=['umabanner'])
 	async def uma(self, ctx: commands.Context):
@@ -20,8 +23,9 @@ class Uma(commands.Cog, name='Uma'):
 				await ctx.send('Failed to fetch banner information.')
 				return
 			json = response.json()
-		except (requests.RequestException, requests.exceptions.JSONDecodeError):
+		except (requests.RequestException, requests.exceptions.JSONDecodeError) as e:
 			await ctx.send('An error occurred while fetching banner information.')
+			self.logger.error(f'Error fetching uma banner info: {e}')
 			return
 
 		infolist = json['information_list']
