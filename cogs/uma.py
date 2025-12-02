@@ -15,11 +15,11 @@ class Uma(commands.Cog, name='Uma'):
 
 		json = {}
 		try:
-			with requests.post(url, json=request) as response:
-				if response.status != 200:
-					await ctx.send('Failed to fetch banner information.')
-					return
-				json = response.json()
+			response = requests.post(url, json=request, timeout=5)
+			if response.status != 200:
+				await ctx.send('Failed to fetch banner information.')
+				return
+			json = response.json()
 		except (requests.RequestException, requests.exceptions.JSONDecodeError):
 			await ctx.send('An error occurred while fetching banner information.')
 			return
