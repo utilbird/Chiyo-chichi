@@ -8,6 +8,8 @@ class Uma(commands.Cog, name='Uma'):
 		self.bot = bot
 		self.logger = logging.getLogger(__name__)
 		self.logger.setLevel(logging.INFO)
+		# Uma api HATES IPv6
+		requests.packages.urllib3.util.connection.HAS_IPV6 = False
 
 	@commands.command(aliases=['umabanner'])
 	async def uma(self, ctx: commands.Context):
@@ -18,7 +20,7 @@ class Uma(commands.Cog, name='Uma'):
 
 		json = {}
 		try:
-			response = requests.post(url, json=request, timeout=5)
+			response = requests.post(url, json=request, timeout=3)
 			if response.status != 200:
 				await ctx.send('Failed to fetch banner information.')
 				return
