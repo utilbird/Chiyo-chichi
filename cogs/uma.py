@@ -8,20 +8,19 @@ class Uma(commands.Cog, name='Uma'):
 		self.bot = bot
 		self.logger = logging.getLogger(__name__)
 		self.logger.setLevel(logging.INFO)
-		# Uma api HATES IPv6
-		requests.packages.urllib3.util.connection.HAS_IPV6 = False
+
 
 	@commands.command(aliases=['umabanner'])
 	async def uma(self, ctx: commands.Context):
 		"""Displays the current Umamusume banner information"""
 
-		url = 'https://api.games.umamusume.com/umamusume/ajax/info_index?format=json'
-		request = {'category':0, 'device':4, 'viewer_id':0, 'limit':10, 'offset':0}
+		url = 'https://umamusume.com/api/ajax/pr_info_index?format=json'
+		request = {'announce_label':1, 'limit':10, 'offset':0}
 
 		json = {}
 		try:
-			response = requests.post(url, json=request, timeout=3)
-			if response.status != 200:
+			response = requests.post(url, json=request, timeout=4)
+			if not response.ok:
 				await ctx.send('Failed to fetch banner information.')
 				return
 			json = response.json()
@@ -29,13 +28,11 @@ class Uma(commands.Cog, name='Uma'):
 			await ctx.send('An error occurred while fetching banner information.')
 			self.logger.error(f'Error fetching uma banner info: {e}')
 			return
-
-		infolist = json['information_list']
-		if not infolist:
-			await ctx.send('No banner information available.')
+		if not json['response_code'] or json['response_code'] != 1 or not json['information_list']:
+			await ctx.send('Bad API response - No banner information available.')
 			return
 		embeds = []
-		for entry in infolist:
+		for entry in json['information_list']:
 			title = f'**{entry['title'].replace('*', '\\*')}**'
 			embed = discord.Embed(title=title)
 			if entry['image']:
