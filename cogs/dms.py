@@ -16,7 +16,7 @@ from discord.ext import commands, tasks
 log = logging.getLogger("deadman_switch")
 
 # ---------------------------------------------------------------------------
-# Configuration
+# Configuration (TODO: put it in the actual config file)
 # ---------------------------------------------------------------------------
 
 DATA_FILE = Path(__file__).resolve().parent / "store" / "deadman_switches.json"
@@ -298,6 +298,9 @@ class DeadManSwitch(commands.Cog):
             return
 
         sid = uuid.uuid4().hex[:8]
+        # for the 1 in 4 billion chance
+        while sid in self.data["switches"]:
+            sid = uuid.uuid4().hex[:8]
         attachment_path = await self._save_attachment(sid, attachment) if attachment else None
 
         async with self._lock:
