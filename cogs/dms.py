@@ -19,8 +19,8 @@ log = logging.getLogger("deadman_switch")
 # Configuration (TODO: put it in the actual config file)
 # ---------------------------------------------------------------------------
 
-DATA_FILE = Path(__file__).resolve().parent / "store" / "deadman_switches.json"
-ATTACHMENTS_DIR = Path(__file__).resolve().parent / "store" / "deadman_attachments"
+DATA_FILE = Path(__file__).resolve().parent.parent / "store" / "deadman_switches.json"
+ATTACHMENTS_DIR = Path(__file__).resolve().parent.parent / "store" / "deadman_attachments"
 CHECK_INTERVAL_SECONDS = 60            # how often the background loop wakes up
 MIN_SWITCH_SECONDS = 5 * 60            # 5 minutes - stops accidental instant triggers
 MAX_SWITCH_SECONDS = 365 * 24 * 3600   # 1 year - sanity cap
