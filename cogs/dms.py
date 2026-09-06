@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import re
+import shutil
 import time
 import uuid
 from pathlib import Path
@@ -19,9 +20,11 @@ log = logging.getLogger("deadman_switch")
 # ---------------------------------------------------------------------------
 
 DATA_FILE = Path(__file__).resolve().parent / "store" / "deadman_switches.json"
+ATTACHMENTS_DIR = Path(__file__).resolve().parent / "store" / "deadman_attachments"
 CHECK_INTERVAL_SECONDS = 60            # how often the background loop wakes up
 MIN_SWITCH_SECONDS = 5 * 60            # 5 minutes - stops accidental instant triggers
 MAX_SWITCH_SECONDS = 365 * 24 * 3600   # 1 year - sanity cap
+MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024  # 8 MB - stay well under Discord's DM upload cap
 
 # Send the author a reminder DM once the remaining time drops below each of
 # these thresholds. Only thresholds smaller than a given switch's total
@@ -132,15 +135,32 @@ class DeadManSwitch(commands.Cog):
             if sw["author_id"] == author_id
         }
 
-    async def _dm(self, user_id: int, content: str) -> bool:
-        """Best-effort DM. Returns True on success."""
+    async def _dm(self, user_id: int, content: str, file_path: Path | None = None) -> bool:
+        """Best-effort DM, optionally with a file attached. Returns True on success."""
         try:
             user = self.bot.get_user(user_id) or await self.bot.fetch_user(user_id)
-            await user.send(content)
+            if file_path and file_path.exists():
+                await user.send(content, file=discord.File(file_path, filename=file_path.name))
+            else:
+                await user.send(content)
             return True
-        except (discord.NotFound, discord.Forbidden, discord.HTTPException):
+        except (discord.NotFound, discord.Forbidden, discord.HTTPException, OSError):
             log.warning("Could not DM user %s", user_id, exc_info=True)
             return False
+
+    async def _save_attachment(self, sid: str, attachment: discord.Attachment) -> Path:
+        """Download a command attachment to disk so it survives past the
+        original Discord message (CDN URL can expire or be deleted)."""
+        switch_dir = ATTACHMENTS_DIR / sid
+        switch_dir.mkdir(parents=True, exist_ok=True)
+        dest = switch_dir / attachment.filename
+        await attachment.save(dest)
+        return dest
+
+    def _delete_attachment(self, sid: str) -> None:
+        switch_dir = ATTACHMENTS_DIR / sid
+        if switch_dir.exists():
+            shutil.rmtree(switch_dir, ignore_errors=True)
 
     # -- background loop --------------------------------------------------
 
@@ -179,14 +199,17 @@ class DeadManSwitch(commands.Cog):
             self._save()
 
     async def _fire(self, sid: str, sw: dict[str, Any]) -> None:
-        """Deliver the payload message to the recipient and remove the switch."""
+        """Deliver the payload message (and attachment, if any) and remove the switch."""
+        attachment_path = Path(sw["attachment"]) if sw.get("attachment") else None
+        text = sw["message"] or "(no text — see attachment)"
         sent = await self._dm(
             sw["recipient_id"],
             (
-                f"📨 You've received a message via a dead man's switch set up by "
+                f"You've received a message via a dead man's switch set up by "
                 f"<@{sw['author_id']}> (user ID {sw['author_id']}):\n\n"
-                f"{sw['message']}"
+                f"{text}"
             ),
+            file_path=attachment_path,
         )
         await self._dm(
             sw["author_id"],
@@ -196,6 +219,7 @@ class DeadManSwitch(commands.Cog):
                 f"<@{sw['recipient_id']}>."
             ),
         )
+        self._delete_attachment(sid)
         del self.data["switches"][sid]
 
     @check_loop.before_loop
@@ -203,7 +227,8 @@ class DeadManSwitch(commands.Cog):
         await self.bot.wait_until_ready()
 
     # -- commands (all DM-only) -------------------------------------------
-    @commands.group(name="deadman", invoke_without_command=True, hidden=True)
+
+    @commands.group(name="deadman", invoke_without_command=True)
     @commands.dm_only()
     async def deadman(self, ctx: commands.Context) -> None:
         """Manage dead man's switches."""
@@ -223,13 +248,33 @@ class DeadManSwitch(commands.Cog):
         recipient_id: int,
         duration: str,
         *,
-        message: str,
+        message: str = "",
     ) -> None:
         """Arm a new switch.
 
         Example:
             deadman set 123456789012345678 3d Here's the safe combination: ...
+            (with a file attached to the same message, message text is now optional)
         """
+        attachment = None
+        if ctx.message.attachments:
+            if ctx.message.attachments.count > 1:
+                await ctx.send("Attachment limited to 1 per message") # I'm lazy
+                return
+            attachment = ctx.message.attachments[0]
+
+        if not message and not attachment:
+            await ctx.send("Provide a message, an attachment, or both.")
+            return
+
+        if attachment:
+            # I don't *THINK* I need any other sanity checks
+            if attachment.size > MAX_ATTACHMENT_BYTES:
+                await ctx.send(
+                    f"Attachment is too large (max {MAX_ATTACHMENT_BYTES // (1024 * 1024)} MB)."
+                )
+                return
+
         try:
             seconds = parse_duration(duration)
         except ValueError as exc:
@@ -253,11 +298,14 @@ class DeadManSwitch(commands.Cog):
             return
 
         sid = uuid.uuid4().hex[:8]
+        attachment_path = await self._save_attachment(sid, attachment) if attachment else None
+
         async with self._lock:
             self.data["switches"][sid] = {
                 "author_id": ctx.author.id,
                 "recipient_id": recipient_id,
                 "message": message,
+                "attachment": str(attachment_path) if attachment_path else None,
                 "interval": seconds,
                 "last_checkin": time.time(),
                 "reminders_sent": [],
@@ -265,9 +313,10 @@ class DeadManSwitch(commands.Cog):
             }
             self._save()
 
+        attach_note = f" plus `{attachment.filename}`" if attachment else ""
         await ctx.send(
             f"✅ Switch `{sid}` armed. If I don't hear a check-in from you within "
-            f"**{format_duration(seconds)}**, I'll DM your message to "
+            f"**{format_duration(seconds)}**, I'll DM your message{attach_note} to "
             f"**{recipient}** ({recipient_id}).\n"
             f"Reset the timer any time with `deadman checkin {sid}`."
         )
@@ -305,8 +354,9 @@ class DeadManSwitch(commands.Cog):
         for sid, sw in mine.items():
             remaining = sw["last_checkin"] + sw["interval"] - now
             preview = sw["message"] if len(sw["message"]) <= 50 else sw["message"][:47] + "..."
+            clip = " 📎" if sw.get("attachment") else ""
             lines.append(
-                f"`{sid}` → <@{sw['recipient_id']}> in {format_duration(remaining)} — \"{preview}\""
+                f"`{sid}` → <@{sw['recipient_id']}> in {format_duration(remaining)} — \"{preview}\"{clip}"
             )
         await ctx.send("Your active switches:\n" + "\n".join(lines))
 
@@ -321,6 +371,7 @@ class DeadManSwitch(commands.Cog):
                 return
             del self.data["switches"][switch_id]
             self._save()
+        self._delete_attachment(switch_id)
         await ctx.send(f"🗑️ Switch `{switch_id}` cancelled.")
 
     # -- error handling ------------------------------------------------
