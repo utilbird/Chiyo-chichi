@@ -258,7 +258,7 @@ class DeadManSwitch(commands.Cog):
         """
         attachment = None
         if ctx.message.attachments:
-            if ctx.message.attachments.count > 1:
+            if ctx.message.attachments.count() > 1:
                 await ctx.send("Attachment limited to 1 per message") # I'm lazy
                 return
             attachment = ctx.message.attachments[0]
